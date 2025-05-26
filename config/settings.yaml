@@ -1,0 +1,5 @@
+time_start: 0
+time_end: 3
+time_step: 0.1
+x_0: 0
+v_function: "-exp(t)"
