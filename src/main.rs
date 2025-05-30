@@ -51,58 +51,38 @@ impl Solver {
         current_val + self.time_step * (self.d_dt_function_t(current_val) + self.d_dt_function_t(&predictor)) / 2.0
     }
     
-    fn solve_euler(&self) -> f32 {
-        // Solve ODE to find f(time_end) using Euler's method
-        let mut f_t = self.f_0;
-        let mut t = 0.0;
-        
-        while t < self.time_end {
-            f_t = self.euler_next_step(&f_t);
-            t += self.time_step;
-        }
-        f_t
-    }
-    
-    fn solve_trapezoidal(&self) -> f32 {
-        // Solve ODE to find f(time_end) using trapezoidal method
-        let mut f_t = self.f_0;
-        let mut t = 0.0;
-        
-        while t < self.time_end {
-            f_t = self.trapezoidal_next_step(&f_t);
-            t += self.time_step;
-        }
-        f_t
-    }
-    
-    fn integrate_euler_solution(&self) -> f32 {
+    fn integrate_solution(&self, method: &str) -> (Vec<f32>, Vec<f32>, Vec<f32>) {
         // Compute integral ∫f(t)dt from 0 to time_end using Euler method for ODE + trapezoidal rule for integration
-        let mut f_t = self.f_0;
-        let mut area = 0.0;
-        let mut t = 0.0;
+        // method: &str
+        // - "euler": euler method
+        // - "trap": trapezoid
+        let mut f_t: f32 = self.f_0;
+        let mut area: f32 = 0.0;
+        let mut t: f32 = 0.0;
+
+        let mut t_vec = vec![t];
+        let mut f_t_vec = vec![f_t];
+        let mut area_vec = vec![area];
         
         while t < self.time_end {
-            let f_t_next = self.euler_next_step(&f_t);
+            let f_t_next: f32;
+            if method == "euler" {
+                f_t_next = self.euler_next_step(&f_t);
+            } else if method == "trap" {
+                f_t_next = self.trapezoidal_next_step(&f_t);
+            } else {
+                panic!("Bad parameter; method: &str");
+            }
             area += (f_t + f_t_next) * self.time_step / 2.0;
+
             f_t = f_t_next;
             t += self.time_step;
+
+            t_vec.push(t);
+            f_t_vec.push(f_t);
+            area_vec.push(area);
         }
-        area
-    }
-    
-    fn integrate_trapezoidal_solution(&self) -> f32 {
-        // Compute integral ∫f(t)dt from 0 to time_end using trapezoidal method for ODE + trapezoidal rule for integration
-        let mut f_t = self.f_0;
-        let mut area = 0.0;
-        let mut t = 0.0;
-        
-        while t < self.time_end {
-            let f_t_next = self.trapezoidal_next_step(&f_t);
-            area += (f_t + f_t_next) * self.time_step / 2.0;
-            f_t = f_t_next;
-            t += self.time_step;
-        }
-        area
+        (t_vec, f_t_vec, area_vec)
     }
     
     fn integrate_analytical(&self) -> f32 {
@@ -131,19 +111,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     println!("{:?}", conf);
     println!();
+
+    let (t_vec, euler_f_t, euler_area) = conf.integrate_solution("euler");
+    let (_, trap_f_t, trap_area) = conf.integrate_solution("trap");
     
     // Compare final values f(time_end)
     println!("=== Final Values f({}) ===", conf.time_end);
     println!("Analytical solution: {:.6}", conf.function_t(&conf.time_end));
-    println!("Euler method:        {:.6}", conf.solve_euler());
-    println!("Trapezoidal method:  {:.6}", conf.solve_trapezoidal());
+    println!("Euler method:        {:.6}", euler_f_t.last().unwrap());
+    println!("Trapezoidal method:  {:.6}", trap_f_t.last().unwrap());
     println!();
     
     // Compare integrals ∫f(t)dt from 0 to time_end
     println!("=== Integrals ∫f(t)dt from 0 to {} ===", conf.time_end);
     println!("Analytical integral:           {:.6}", conf.integrate_analytical());
-    println!("Euler ODE + Trap integration:  {:.6}", conf.integrate_euler_solution());
-    println!("Trap ODE + Trap integration:   {:.6}", conf.integrate_trapezoidal_solution());
-    
+    println!("Euler ODE + Trap integration:  {:.6}", euler_area.last().unwrap());
+    println!("Trap ODE + Trap integration:   {:.6}", trap_area.last().unwrap());
+    println!();
+
+    println!("t: {:?}", t_vec);
     Ok(())
 }
