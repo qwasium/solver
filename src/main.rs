@@ -1,3 +1,7 @@
+use std::error::Error;
+use std::fs;
+use std::path::{Path, PathBuf};
+use csv::Writer;
 
 #[derive(Debug, Clone)]
 struct Solver {
@@ -100,7 +104,35 @@ impl Solver {
     }
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn write_csv<P: AsRef<Path>>(
+    time_vec: &[f32],
+    euler_vec: &[f32],
+    trap_vec: &[f32],
+    filename: P
+) -> Result<(), Box<dyn Error>> {
+    assert_eq!(time_vec.len(), euler_vec.len(), "Input vector has unequal length.");
+    assert_eq!(time_vec.len(), trap_vec.len(), "Input vector has unequal length.");
+
+    if let Some(parent) = filename.as_ref().parent() {
+        fs::create_dir_all(parent)?;
+    }
+
+    let mut wrt = Writer::from_path(filename)?;
+    wrt.write_record(&["timestamp", "euler", "trapezoid"])?; // header
+    for row in 0..time_vec.len() {
+        wrt.write_record(
+            &[
+                time_vec[row].to_string(), // col 0
+                euler_vec[row].to_string(),  // col 1
+                trap_vec[row].to_string() // col 2
+            ]
+        )?;
+    }
+    wrt.flush()?;
+    Ok(())
+}
+
+fn main() -> Result<(), Box<dyn Error>> {
     let conf = Solver::new(
         3.0,  // time_end
         0.05, // time_step
@@ -129,6 +161,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Trap ODE + Trap integration:   {:.6}", trap_area.last().unwrap());
     println!();
 
-    println!("t: {:?}", t_vec);
+    // Write out to result/*.csv
+    let data_dir = PathBuf::from("result");
+    write_csv(&t_vec, &euler_f_t, &trap_f_t, data_dir.join("f_t.csv"))?;
+    write_csv(&t_vec, &euler_area, &trap_area, data_dir.join("area.csv"))?;
     Ok(())
 }
