@@ -1,0 +1,7 @@
+time_end: 3
+time_step: 0.05
+f_0: 2
+mass: 1.0
+viscosity: 1.0
+ft_fname: "f_t.csv"
+area_fname: "area.csv"

@@ -1,5 +1,7 @@
-time_start: 0
-time_end: 3
-time_step: 0.1
-x_0: 0
-v_function: "-exp(t)"
+area_fname: area.csv
+f_0: 4
+ft_fname: f_t.csv
+mass: 2
+time_end: 15
+time_step: 0.5
+viscosity: 3
