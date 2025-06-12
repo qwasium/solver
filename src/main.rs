@@ -22,14 +22,7 @@ impl Solver {
         mass: f32,
         viscosity: f32,
     ) -> Solver {
-        Solver {
-            time_end,
-            time_step,
-            f_0,
-            mass,
-            viscosity,
-            gravity: 9.8
-        }
+        Solver {time_end, time_step, f_0, mass, viscosity, gravity: 9.8}
     }
 
     fn function_t(&self, t: &f32) -> f32 {
@@ -41,6 +34,7 @@ impl Solver {
 
     fn d_dt_function_t(&self, current_val: &f32) -> f32 {
         // df(t)/dt = g - gamma*f(t)/mass
+        // NOTE: Only applies for: time_start = 0
         self.gravity - self.viscosity * current_val / self.mass
     }
 
@@ -113,6 +107,7 @@ fn read_yaml<P: AsRef<Path>>(fpath: P)
 }
 
 fn yaml_to_f32(yaml: &yaml_rust::Yaml) -> Option<f32> {
+    // Convert yaml numeric to f32
     match yaml{
         yaml_rust::Yaml::Integer(i) => Some(*i as f32),
         yaml_rust::Yaml::Real(s) => s.parse().ok(),
@@ -121,10 +116,7 @@ fn yaml_to_f32(yaml: &yaml_rust::Yaml) -> Option<f32> {
 }
 
 fn write_csv<P: AsRef<Path>>(
-    time_vec: &[f32],
-    euler_vec: &[f32],
-    trap_vec: &[f32],
-    filename: P
+    time_vec: &[f32], euler_vec: &[f32], trap_vec: &[f32], filename: P
 ) -> Result<(), Box<dyn Error>> {
     assert_eq!(time_vec.len(), euler_vec.len(), "Input vector has unequal length.");
     assert_eq!(time_vec.len(), trap_vec.len(), "Input vector has unequal length.");
@@ -138,9 +130,9 @@ fn write_csv<P: AsRef<Path>>(
     for row in 0..time_vec.len() {
         wrt.write_record(
             &[
-                time_vec[row].to_string(), // col 0
-                euler_vec[row].to_string(),  // col 1
-                trap_vec[row].to_string() // col 2
+                time_vec[row].to_string(),  // col 0
+                euler_vec[row].to_string(), // col 1
+                trap_vec[row].to_string()   // col 2
             ]
         )?;
     }
@@ -152,16 +144,15 @@ fn main() -> Result<(), Box<dyn Error>> {
     // Read config/settings.yaml
     let conf_path = PathBuf::from("config").join("settings.yaml");
     let conf_docs = read_yaml(&conf_path)?;
-    // if let Some(doc) = conf_docs.first() {println!("{:?}", doc);} // debug
     let doc = &conf_docs[0];
     // println!("{:?}", doc); // debug
 
     let conf = Solver::new(
-        yaml_to_f32(&doc["time_end"]).expect("Should be f32 mappable"),  // time_end
-        yaml_to_f32(&doc["time_step"]).expect("Should be f32 mappable"), // time_step
-        yaml_to_f32(&doc["f_0"]).expect("Should be f32 mappable"),       // f(0)
-        yaml_to_f32(&doc["mass"]).expect("Should be f32 mappable"),      // mass
-        yaml_to_f32(&doc["viscosity"]).expect("Should be f32 mappable"), // viscosity
+        yaml_to_f32(&doc["time_end"]).expect("time_end must be numeric"),   // time_end
+        yaml_to_f32(&doc["time_step"]).expect("time_step must be numeric"), // time_step
+        yaml_to_f32(&doc["f_0"]).expect("f_0 must be numeric"),             // f(0)
+        yaml_to_f32(&doc["mass"]).expect("mass must be numeric"),           // mass
+        yaml_to_f32(&doc["viscosity"]).expect("viscosity must be numeric"), // viscosity
     );
 
     println!("{:?}", conf);
@@ -186,8 +177,8 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // Write result/*.csv
     let data_dir = PathBuf::from("result");
-    let ft_path = data_dir.join(doc["ft_fname"].as_str().expect("ft_fname should be string"));
-    let area_path = data_dir.join(doc["area_fname"].as_str().expect("area_fname should be string"));
+    let ft_path = data_dir.join(doc["ft_fname"].as_str().expect("ft_fname must be string"));
+    let area_path = data_dir.join(doc["area_fname"].as_str().expect("area_fname must be string"));
     write_csv(&t_vec, &euler_f_t, &trap_f_t, &ft_path)?;
     write_csv(&t_vec, &euler_area, &trap_area, &area_path)?;
     Ok(())

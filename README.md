@@ -1,6 +1,6 @@
 # solver
 
-Implementing physics solvers for self study.
+Implementing physics solvers in rust for self study.
 
 See:
 
@@ -14,3 +14,8 @@ python3.13 -m venv .venv # or uv venv --python 3.13 .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 ```
+
+## Model
+
+
+

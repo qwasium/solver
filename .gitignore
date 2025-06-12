@@ -1,4 +1,5 @@
-# simulation results
+# data
+config/settings.yaml
 result/
 
 # Rust ------------------------------------------------------------------------------------- #
