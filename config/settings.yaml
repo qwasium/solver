@@ -1,7 +1,7 @@
 area_fname: area.csv
 f_0: 0
 ft_fname: f_t.csv
-mass: 2
-time_end: 5
-time_step: 0.01
+mass: 10
+time_end: 3
+time_step: 0.05
 viscosity: 10

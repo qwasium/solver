@@ -15,6 +15,22 @@ struct Solver {
 }
 
 impl Solver {
+    /*
+     * We want:
+     * - f(t)
+     * - ∫f(t)dt for 0->t
+     *
+     * We don't know:
+     * - exact function: f(t)
+     *
+     * We know:
+     * - derivetive of f(t): df(t)/dt
+     * - initial value: f(0)
+     *
+     * We have a model of f(current) & f'(current) -> f(next)
+     * - model: f(t+Δt) = some_function(f(t), f'(t))
+     *
+     */
     fn new(
         time_end: f32,
         time_step: f32,
@@ -29,12 +45,16 @@ impl Solver {
         // Analytical solution: f(t)
         let mg_vis = self.mass * self.gravity / self.viscosity;
         mg_vis + (self.f_0 - mg_vis) * (-self.viscosity * t / self.mass).exp()
-        // mg_vis * self.time_end - (self.f_0 - mg_vis) * mg_vis * ((-self.viscosity * self.time_end / self.mass).exp() - 1.0)
+    }
+
+    fn integrate_function_t(&self, t: &f32) -> f32 {
+        // Analytical solution: ∫f(t)dt for 0 -> t
+        let mg_vis = self.mass * self.gravity / self.viscosity;
+        mg_vis * t - (self.f_0 - mg_vis) * (self.mass / self.viscosity) * ((-self.viscosity * t / self.mass).exp() - 1.0)
     }
 
     fn d_dt_function_t(&self, current_val: &f32) -> f32 {
         // df(t)/dt = g - gamma*f(t)/mass
-        // NOTE: Only applies for: time_start = 0
         self.gravity - self.viscosity * current_val / self.mass
     }
 
@@ -55,9 +75,10 @@ impl Solver {
         // method: &str
         // - "euler": euler method
         // - "trap": trapezoid
+        // - "analytical": analytical 
+        let mut t: f32 = 0.0;
         let mut f_t: f32 = self.f_0;
         let mut area: f32 = 0.0;
-        let mut t: f32 = 0.0;
 
         let mut t_vec = vec![t];
         let mut f_t_vec = vec![f_t];
@@ -67,12 +88,17 @@ impl Solver {
             let f_t_next: f32;
             if method == "euler" {
                 f_t_next = self.euler_next_step(&f_t);
+                area += (f_t + f_t_next) * self.time_step / 2.0;
             } else if method == "trap" {
                 f_t_next = self.trapezoidal_next_step(&f_t);
+                area += (f_t + f_t_next) * self.time_step / 2.0;
+            } else if method == "analytical" {
+                f_t_next = self.function_t(&(t + self.time_step));
+                area = self.integrate_function_t(&t);
             } else {
                 panic!("Bad parameter; method: &str");
             }
-            area += (f_t + f_t_next) * self.time_step / 2.0;
+            // area += (f_t + f_t_next) * self.time_step / 2.0;
 
             f_t = f_t_next;
             t += self.time_step;
@@ -82,20 +108,6 @@ impl Solver {
             area_vec.push(area);
         }
         (t_vec, f_t_vec, area_vec)
-    }
-
-    fn integrate_analytical(&self) -> f32 {
-        // Compute integral of analytical solution for comparison
-        let mut area = 0.0;
-        let mut t = 0.0;
-
-        while t < self.time_end {
-            let f_t = self.function_t(&t);
-            let f_t_next = self.function_t(&(t + self.time_step));
-            area += (f_t + f_t_next) * self.time_step / 2.0;
-            t += self.time_step;
-        }
-        area
     }
 }
 
@@ -116,23 +128,25 @@ fn yaml_to_f32(yaml: &yaml_rust::Yaml) -> Option<f32> {
 }
 
 fn write_csv<P: AsRef<Path>>(
-    time_vec: &[f32], euler_vec: &[f32], trap_vec: &[f32], filename: P
+    time_vec: &[f32], euler_vec: &[f32], trap_vec: &[f32], anal_vec: &[f32],  filename: P
 ) -> Result<(), Box<dyn Error>> {
     assert_eq!(time_vec.len(), euler_vec.len(), "Input vector has unequal length.");
     assert_eq!(time_vec.len(), trap_vec.len(), "Input vector has unequal length.");
+    assert_eq!(time_vec.len(), anal_vec.len(), "Input vector has unequal length.");
 
     if let Some(parent) = filename.as_ref().parent() {
         fs::create_dir_all(parent)?;
     }
 
     let mut wrt = Writer::from_path(filename)?;
-    wrt.write_record(&["timestamp", "euler", "trapezoid"])?; // header
+    wrt.write_record(&["timestamp", "euler", "trapezoid", "analytical"])?; // header
     for row in 0..time_vec.len() {
         wrt.write_record(
             &[
                 time_vec[row].to_string(),  // col 0
                 euler_vec[row].to_string(), // col 1
-                trap_vec[row].to_string()   // col 2
+                trap_vec[row].to_string(),  // col 2
+                anal_vec[row].to_string()   // col 3
             ]
         )?;
     }
@@ -158,7 +172,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     println!("{:?}", conf);
     println!();
 
-    let (t_vec, euler_f_t, euler_area) = conf.integrate_solution("euler");
+    let (t_vec, anal_f_t, anal_area) = conf.integrate_solution("analytical");
+    let (_, euler_f_t, euler_area) = conf.integrate_solution("euler");
     let (_, trap_f_t, trap_area) = conf.integrate_solution("trap");
 
     // Compare final values f(time_end)
@@ -170,7 +185,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // Compare integrals ∫f(t)dt from 0 to time_end
     println!("=== Integrals ∫f(t)dt from 0 to {} ===", conf.time_end);
-    println!("Analytical integral:           {:.6}", conf.integrate_analytical());
+    println!("Analytical integral:           {:.6}", anal_area.last().unwrap());
     println!("Euler ODE + Trap integration:  {:.6}", euler_area.last().unwrap());
     println!("Trap ODE + Trap integration:   {:.6}", trap_area.last().unwrap());
     println!();
@@ -179,7 +194,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let data_dir = PathBuf::from("result");
     let ft_path = data_dir.join(doc["ft_fname"].as_str().expect("ft_fname must be string"));
     let area_path = data_dir.join(doc["area_fname"].as_str().expect("area_fname must be string"));
-    write_csv(&t_vec, &euler_f_t, &trap_f_t, &ft_path)?;
-    write_csv(&t_vec, &euler_area, &trap_area, &area_path)?;
+    write_csv(&t_vec, &euler_f_t, &trap_f_t, &anal_f_t, &ft_path)?;
+    write_csv(&t_vec, &euler_area, &trap_area, &anal_area, &area_path)?;
     Ok(())
 }
