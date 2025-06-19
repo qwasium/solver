@@ -1,6 +1,6 @@
 # solver
 
-Implementing physics solvers in rust for self study.
+Implementing physics solvers for initial value problems in rust for self study.
 
 See:
 
