@@ -1,7 +1,8 @@
 area_fname: area.csv
 f_0: 0
 ft_fname: f_t.csv
-mass: 10
+model_params:
+- 10
+- 10
 time_end: 3
-time_step: 1
-viscosity: 10
+time_step: 0.5

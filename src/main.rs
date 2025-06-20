@@ -23,6 +23,24 @@ fn yaml_to_f32(yaml: &yaml_rust::Yaml) -> Option<f32> {
     }
 }
 
+fn yaml_to_f32_vec(yaml: &yaml_rust::Yaml) -> Option<Vec<f32>> {
+    // Convert yaml array to Vec<f32>
+    match yaml {
+        yaml_rust::Yaml::Array(arr) => {
+            let mut result = Vec::new();
+            for item in arr {
+                if let Some(val) = yaml_to_f32(item) {
+                    result.push(val);
+                } else {
+                    return None; // Invalid item in array
+                }
+            }
+            Some(result)
+        }
+        _ => None,
+    }
+}
+
 fn write_csv<P: AsRef<Path>>(
     time_vec: &[f32], euler_vec: &[f32], trap_vec: &[f32], rk_vec: &[f32], anal_vec: &[f32],  filename: P
 ) -> Result<(), Box<dyn Error>> {
@@ -63,8 +81,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         yaml_to_f32(&doc["time_end"]).expect("time_end must be numeric"),   // time_end
         yaml_to_f32(&doc["time_step"]).expect("time_step must be numeric"), // time_step
         yaml_to_f32(&doc["f_0"]).expect("f_0 must be numeric"),             // f(0)
-        yaml_to_f32(&doc["mass"]).expect("mass must be numeric"),           // mass
-        yaml_to_f32(&doc["viscosity"]).expect("viscosity must be numeric"), // viscosity
+        yaml_to_f32_vec(&doc["model_params"]).expect("model_params must be array of numerics")
     );
 
     println!("{:?}", conf);

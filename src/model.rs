@@ -1,11 +1,11 @@
 #[derive(Debug, Clone)]
 pub struct Solver {
     pub time_end : f32, // integration upper limit (starting from t=0)
-    time_step: f32, // time step Δt
-    f_0      : f32, // initial value f(0)
-    mass     : f32, // mass
-    viscosity: f32, // viscosity coefficient
-    gravity  : f32  // gravitational acceleration 9.8 m/s^2
+    time_step    : f32, // time step Δt
+    f_0          : f32, // initial value f(0)
+    mass         : f32, // mass
+    viscosity    : f32, // viscosity coefficient
+    gravity      : f32  // gravitational acceleration 9.8 m/s^2
 }
 
 impl Solver {
@@ -29,10 +29,16 @@ impl Solver {
         time_end: f32,
         time_step: f32,
         f_0: f32,
-        mass: f32,
-        viscosity: f32,
+        model_params: Vec<f32>
     ) -> Solver {
-        Solver {time_end, time_step, f_0, mass, viscosity, gravity: 9.8}
+        assert_eq!(model_params.len(), 2, "model_params must be length 2: [mass, viscosity]");
+        let mass = model_params[0];
+        let viscosity = model_params[1];
+        Solver {
+            time_end, time_step, f_0, 
+            mass, viscosity,
+            gravity: 9.8
+        }
     }
 
     /* Analytical Solutions ******************************************************/
@@ -73,8 +79,6 @@ impl Solver {
 
     fn rk4_next_step(&self, current_val: &f32) -> f32 {
         // f(t+Δt) = f(t) + (Δt/6) * (k_1 + 2*k_2 + 2*k_3 + k_4)
-        // k_1: df(t)/dt
-        // k_2: 
         let k_one = self.d_dt_function_t(current_val);
         let k_two = self.d_dt_function_t(&(current_val + self.time_step * k_one / 2.0));
         let k_three = self.d_dt_function_t(&(current_val + self.time_step * k_two / 2.0));
@@ -87,6 +91,7 @@ impl Solver {
         // method: &str
         // - "euler": euler method
         // - "trap": trapezoid
+        // - "rk4": Runge-Kutta 4
         // - "analytical": analytical 
         let mut t: f32 = 0.0;
         let mut f_t: f32 = self.f_0;
