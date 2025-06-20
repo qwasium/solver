@@ -5,4 +5,4 @@ model_params:
 - 10
 - 10
 time_end: 3
-time_step: 0.0001
+time_step: 1.0000000000000003e-05
