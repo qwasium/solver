@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 #[derive(Debug, Clone)]
 pub struct Solver {
     pub time_end : f32, // integration upper limit (starting from t=0)
@@ -29,11 +31,13 @@ impl Solver {
         time_end: f32,
         time_step: f32,
         f_0: f32,
-        model_params: Vec<f32>
+        model_params: HashMap<String, f32> // {"mass": xx, "viscosity": yy}
     ) -> Solver {
         assert_eq!(model_params.len(), 2, "model_params must be length 2: [mass, viscosity]");
-        let mass = model_params[0];
-        let viscosity = model_params[1];
+        assert!(model_params.contains_key("mass"), "model_parameters must contain 'mass' key");
+        assert!(model_params.contains_key("viscosity"), "model_parameters must contain 'viscosity' key");
+        let mass = model_params["mass"];
+        let viscosity = model_params["viscosity"];
         Solver {
             time_end, time_step, f_0,  mass, viscosity, gravity: 9.8
         }
