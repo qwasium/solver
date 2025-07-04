@@ -1,8 +1,13 @@
-area_fname: area.csv
-f_0: 0
-ft_fname: f_t.csv
+acc_fname: acceleration.csv
+init_acceleration: 0.0
+init_position: 0.0
+init_velocity: 0.0
 model_params:
+  amplitude: 5
+  frequency: 3
   mass: 10
-  viscosity: 10
-time_end: 3
-time_step: 1.0000000000000003e-05
+  spring: 10
+pos_fname: position.csv
+time_end: 15
+time_step: 0.1
+vel_fname: velocity.csv

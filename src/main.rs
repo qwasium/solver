@@ -48,7 +48,7 @@ fn yaml_to_f32_hashmap(yaml: &yaml_rust::Yaml) -> Option<HashMap<String, f32>> {
 fn write_csv<P: AsRef<Path>>(
     time_vec: &[f32],
     euler_vec: &[f32],
-    /*trap_vec: &[f32],*/ rk_vec: &[f32],
+    rk_vec: &[f32],
     anal_vec: &[f32],
     filename: P,
 ) -> Result<(), Box<dyn Error>> {
@@ -57,7 +57,6 @@ fn write_csv<P: AsRef<Path>>(
         euler_vec.len(),
         "Input vector has unequal length."
     );
-    // assert_eq!(time_vec.len(), trap_vec.len(), "Input vector has unequal length.");
     assert_eq!(
         time_vec.len(),
         rk_vec.len(),
@@ -74,14 +73,13 @@ fn write_csv<P: AsRef<Path>>(
     }
 
     let mut wrt = Writer::from_path(filename)?;
-    wrt.write_record(&["timestamp", "euler", "trapezoid", "rk4", "analytical"])?; // header
+    wrt.write_record(&["timestamp", "euler", "rk4", "analytical"])?; // header
     for row in 0..time_vec.len() {
         wrt.write_record(&[
             time_vec[row].to_string(),  // col 0
             euler_vec[row].to_string(), // col 1
-            // trap_vec[row].to_string(),  // col 2
-            rk_vec[row].to_string(),   // col 3
-            anal_vec[row].to_string(), // col 4
+            rk_vec[row].to_string(),    // col 3
+            anal_vec[row].to_string(),  // col 4
         ])?;
     }
     wrt.flush()?;
@@ -98,8 +96,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     let conf = Solver::new(
         yaml_to_f32(&doc["time_end"]).expect("time_end must be numeric"), // time_end
         yaml_to_f32(&doc["time_step"]).expect("time_step must be numeric"), // time_step
-        yaml_to_f32(&doc["f_0"]).expect("f_0 must be numeric"),           // f(0)
-        yaml_to_f32(&doc["integral_f_0"]).expect("integral_f_0 must be numeric"), // ∫f(0)dt
+        yaml_to_f32(&doc["init_acceleration"]).expect("init_acceleration must be numeric"), // a(0)
+        yaml_to_f32(&doc["init_velocity"]).expect("init_velocity must be numeric"), // v(0)
+        yaml_to_f32(&doc["init_position"]).expect("init_position must be numeric"), // x(0)
         yaml_to_f32_hashmap(&doc["model_params"])
             .expect("model_params must be hashmap of string and numerics"),
     );
@@ -107,55 +106,65 @@ fn main() -> Result<(), Box<dyn Error>> {
     println!("{:?}", conf);
     println!();
 
-    let (t_vec, anal_f_t, anal_area) = conf.integrate_solution("analytical");
-    let (_, euler_f_t, euler_area) = conf.integrate_solution("euler");
-    // let (_, trap_f_t, trap_area) = conf.integrate_solution("trap");
-    let (_, rk_f_t, rk_area) = conf.integrate_solution("rk4");
+    // let (t_vec, anal_acc, anal_vel, anal_pos) = conf.integrate_solution("analytical");
+    let (t_vec, euler_acc, euler_vel, euler_pos) = conf.integrate_solution("euler");
+    let (_, rk_acc, rk_vel, rk_pos) = conf.integrate_solution("rk4");
 
     // Compare final values f(time_end)
-    println!("=== Final Values f({}) ===", conf.time_end);
-    println!(
-        "Analytical solution: {:.6}",
-        conf.function_t(&conf.time_end)
-    );
-    println!("Euler method:        {:.6}", euler_f_t.last().unwrap());
-    // println!("Trapezoidal method:  {:.6}", trap_f_t.last().unwrap());
-    println!("Runge-Kutta method:  {:.6}", rk_f_t.last().unwrap());
+    println!("=== Final Values v({}) ===", conf.time_end);
+    // println!(
+    //     "Analytical solution: {:.6}",
+    //     conf.function_t(&conf.time_end)
+    // );
+    println!("Euler method:        {:.6}", euler_vel.last().unwrap());
+    println!("Runge-Kutta method:  {:.6}", rk_vel.last().unwrap());
     println!();
 
     // Compare integrals ∫f(t)dt from 0 to time_end
-    println!("=== Integrals ∫f(t)dt from 0 to {} ===", conf.time_end);
     println!(
-        "Analytical integral:           {:.6}",
-        anal_area.last().unwrap()
+        "=== Integrals x(t) = ∫v(t)dt from 0 to {} ===",
+        conf.time_end
     );
+    // println!(
+    //     "Analytical integral:           {:.6}",
+    //     anal_area.last().unwrap()
+    // );
     println!(
         "Euler ODE + Trap integration:  {:.6}",
-        euler_area.last().unwrap()
+        euler_pos.last().unwrap()
     );
-    // println!("Trap ODE + Trap integration:   {:.6}", trap_area.last().unwrap());
     println!(
         "RK4 ODE + Trap integration:    {:.6}",
-        rk_area.last().unwrap()
+        rk_pos.last().unwrap()
     );
     println!();
 
     // Write result/*.csv
     let data_dir = PathBuf::from("result");
-    let ft_path = data_dir.join(doc["ft_fname"].as_str().expect("ft_fname must be string"));
-    let area_path = data_dir.join(
-        doc["area_fname"]
-            .as_str()
-            .expect("area_fname must be string"),
-    );
-    write_csv(&t_vec, &euler_f_t, &trap_f_t, &rk_f_t, &anal_f_t, &ft_path)?;
+    let acceleration_path =
+        data_dir.join(doc["acc_fname"].as_str().expect("acc_fname must be string"));
+    let velocity_path = data_dir.join(doc["vel_fname"].as_str().expect("vel_fname must be string"));
+    let position_path = data_dir.join(doc["pos_fname"].as_str().expect("pos_fname must be string"));
     write_csv(
         &t_vec,
-        &euler_area,
-        &trap_area,
-        &rk_area,
-        &anal_area,
-        &area_path,
+        &euler_acc,
+        &rk_acc,
+        &vec![0.0; t_vec.len()], /*&anal_acc*/
+        &acceleration_path,
+    )?;
+    write_csv(
+        &t_vec,
+        &euler_acc,
+        &rk_acc,
+        &vec![0.0; t_vec.len()], /*&anal_acc*/
+        &velocity_path,
+    )?;
+    write_csv(
+        &t_vec,
+        &euler_pos,
+        &rk_pos,
+        &vec![0.0; t_vec.len()], /*&anal_pos*/
+        &position_path,
     )?;
     Ok(())
 }

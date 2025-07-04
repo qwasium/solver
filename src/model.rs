@@ -2,42 +2,48 @@ use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
 pub struct Solver {
-    pub time_end: f32, // integration upper limit (starting from t=0)
-    time_step: f32,    // time step Δt
-    f_0: f32,          // initial value f(0)
-    integral_f_0: f32, // initial value ∫f(0)dt
-    mass: f32,         // mass
-    spring: f32,       // spring constant
-    amplitude: f32,    // amplitude of external force
-    frequency: f32,    // frequency of external force
+    pub time_end: f32,      // integration upper limit (starting from t=0)
+    time_step: f32,         // time step Δt
+    init_acceleration: f32, // dv(0)/dt = a(0), t=0
+    init_velocity: f32,     // v(0), t=0
+    init_position: f32,     // ∫v(0)dt = x(0), t=0
+    mass: f32,              // mass
+    spring: f32,            // spring constant
+    amplitude: f32,         // amplitude of external force
+    frequency: f32,         // frequency of external force
 }
 
 impl Solver {
     /*
-     * We want:
-     * - f(t)
-     * - ∫f(t)dt for 0->t
+     * - acceleration: a(t) = dv(t)/dt
+     * - velocity    : v(t)
+     * - postion     : x(t) = ∫v(t)dt
      *
-     * We don't know:
-     * - exact function: f(t)
-     * - exact function: ∫f(0)dt
+     * We want to compute:
+     * - velocity at given t = v(t)
+     * - postion  at given t = x(t) = ∫v(t)dt for 0->t
+     * Where exact function of v(t) and x(t) are unknown.
      *
      * We know:
-     * - derivetive of f(t): df(t)/dt
-     * - initial value: f(0)
-     * - initial value: ∫f(0)dt
+     * - initial acceleration : a(0)
+     * - initial velocity     : v(0)
+     * - initial postion      : x(0) = ∫v(0)dt
+     * - model of acceleration: a(t) = some_function(t, v(t))
      *
-     * We have df(t)/f(t) and a way to approximate f(t+Δt) and ∫f(t+Δt)dt
-     * - model: df(t)/dt = hoge_function(t, f(t), ∫f(t)dt)
-     * - approx: f(t+Δt) = fuga_function(t, f(t), df(t)/dt)
-     * - approx: ∫f(t+Δt)dt = piyo_function(t, ∫f(t)dt, f(t))
+     * We have df(t)/f(t) and a way to approximate v(t+Δt) and x(t+Δt)
+     * - approximation: a(t+Δt) = some_function(t, v(t))
+     *   - euler method
+     *   - runge kutta method
+     * - v(t+Δt) = v(t) + Δt * a(t)
+     * - x(t+Δt) = x(t) + Δt * v(t)
      *
      */
     pub fn new(
         time_end: f32,
         time_step: f32,
-        f_0: f32,
-        integral_f_0: f32,
+        init_acceleration: f32,
+        init_velocity: f32,
+        init_position: f32,
         model_params: HashMap<String, f32>, // mass, spring, amplitude, frequency
     ) -> Solver {
         assert_eq!(
@@ -68,8 +74,9 @@ impl Solver {
         Solver {
             time_end,
             time_step,
-            f_0,
-            integral_f_0,
+            init_acceleration,
+            init_velocity,
+            init_position,
             mass,
             spring,
             amplitude,
@@ -77,118 +84,100 @@ impl Solver {
         }
     }
 
-    /* Analytical Solutions ******************************************************/
-    pub fn function_t(&self, t: &f32) -> f32 {
-        // Change here if analytical solution is known.
-        // Analytical solution: f(t)
-    }
-
-    fn integral_function_t(&self, t: &f32) -> f32 {
-        // Change here if analytical solution is known.
-        // Analytical solution: ∫f(t)dt for 0 -> t
-        // A = constant
-        // omega^2 = spring_k / mass
-        // sigma = constant
-        // A cos(omega * t + sigma) + (ext_amp / omega^2) cos(ext_freq * t)
-    }
-    /* Analytical Solutions ********************************************************/
-
+    // /* Analytical Solutions ******************************************************/
+    // fn analytical_t(&self, t: &f32) -> (f32, f32, f32) {
+    //     // Change here if analytical solution is known.
+    //     // Analytical solution: x(t) = ∫v(t)dt for 0 -> t
+    //     // v(t) = dx(t)/dt
+    //     // a(t) = dv(t)/dt
+    //     // A = constant
+    //     // sigma = constant
+    //     // A cos(omega * t + sigma) + (ext_amp / omega^2) cos(ext_freq * t)
+    //     let acc;
+    //     let vel;
+    //     let pos;
+    //     (acc, vel, pos)
+    // }
+    // /* Analytical Solutions ********************************************************/
     /* Model ***********************************************************************/
-    fn d_dt_function_t(
-        &self,
-        current_t: &f32,
-        /*current_f_t: &f32,*/ current_integral: &f32,
-    ) -> f32 {
+    fn acceleration_t(&self, current_t: &f32, current_position: &f32) -> f32 {
         // Change this fuction to change the model.
-        // df(t)/dt = -(spring_k/mass)*∫f(t)dt + ext_amp cos(ext_freq * t)
-        -(current_integral * self.spring / self.mass)
-            + self.amplitude * (self.frequency * current_t).cos()
+        // a(t)
+        //   = -(spring_k / mass) * x(t)dt + (ext_amp / mass) * cos(ext_freq * t)
+        //   = -(spring_k / mass) * ∫v(t)dt + (ext_amp / mass) * cos(ext_freq * t)
+        // This takes the form of the initial value problem
+        //   dv(t)/dt = f(t, v(t))
+        -(current_position * self.spring / self.mass)
+            + (self.amplitude / self.mass) * (self.frequency * current_t).cos()
     }
     /* Model ***********************************************************************/
 
     fn euler_next_step(
         &self,
         current_t: &f32,
-        current_f_t: &f32,
-        current_integral: &f32,
-    ) -> (f32, f32) {
-        // ∫f(t+Δt)dt = ∫f(t)dt + Δt * f(t)
-        // f(t+Δt) = f(t) + Δt * df(t)/dt
-        let next_integral = current_integral + self.time_step * current_f_t;
-        let next_f_t =
-            current_f_t + self.time_step * self.d_dt_function_t(current_t, current_integral);
-        (next_f_t, next_integral)
+        current_acceleration: &f32,
+        current_velocity: &f32,
+        current_position: &f32,
+    ) -> (f32, f32, f32) {
+        // v(t+Δt) = v(t) + Δt * f(t, a(t))
+        // x(t+Δt) = x(t) + Δt * F(t, v(t))
+        let next_acc = current_acceleration
+            + self.time_step * self.acceleration_t(current_t, current_position);
+        let next_vel = current_velocity + self.time_step * (*current_acceleration + next_acc) / 2.0;
+        let next_pos = current_position + self.time_step * (current_velocity + next_vel) / 2.0;
+        (next_acc, next_vel, next_pos)
     }
-
-    fn euler_half_step(
-        &self,
-        current_t: &f32,
-        current_f_t: &f32,
-        current_integral: &f32,
-    ) -> (f32, f32) {
-        // ∫f(t+Δt)dt = ∫f(t)dt + (Δt/2) * f(t)
-        // f(t+Δt) = f(t) + (Δt/2) * df(t)/dt
-        let next_integral = current_integral + self.time_step * current_f_t / 2.0;
-        let next_f_t =
-            current_f_t + self.time_step * self.d_dt_function_t(current_t, current_integral) / 2.0;
-        (next_f_t, next_integral)
-    }
-
-    // fn trapezoidal_next_step(
-    //     &self, current_t: &f32, current_f_t: &f32, current_integral: &f32
-    // ) -> f32 {
-    //     // ∫f(t+Δt)dt = ∫f(t)dt + Δt/2 * [f(t) + f(t+Δt)]
-    //     // f(t+Δt) = f(t) + Δt/2 * [df(t)/dt + df(t+Δt)/dt]
-    //     // Using predictor-corrector approach
-    // }
 
     fn rk4_next_step(
         &self,
         current_t: &f32,
-        current_f_t: &f32,
-        current_integral: &f32,
-    ) -> (f32, f32) {
-        // ∫f(t+Δt)dt = ∫f(t)dt + (Δt/6) * [k1_f(t) + 2*k2_f(t) + 2*k3_f(t) + k4_f(t)]
-        // - k1_f(t) = func(t)
-        // - k2_f(t) = func(t+Δt/2, ∫f(t)dt + k1_f(t) * Δt/2)
-        // - k3_f(t) = func(t+Δt/2, ∫f(t)dt + k2_f(t) * Δt/2)
-        // - k4_f(t) = func(t+Δt, ∫f(t)dt + k3_f(t) * Δt)
-        // f(t+Δt) = f(t) + (Δt/6) * [k1_f'(t) + 2*k2_f'(t) + 2*k3_f'(t) + k4_f'(t)]
-        // - k1_f'(t) = func(t, ∫f(t)dt)
-        // - k2_f'(t) = func(t+Δt/2, ∫f(t)dt + k1_f'(t) * Δt/2)
-        // - k3_f'(t) = func(t+Δt/2, ∫f(t)dt + k2_f'(t) * Δt/2)
-        // - k4_f'(t) = func(t+Δt, ∫f(t)dt + k3_f'(t) * Δt)
+        current_acceleration: &f32,
+        current_velocity: &f32,
+        current_position: &f32,
+    ) -> (f32, f32, f32) {
+        // runge-kutta and trapezoidal
+        // a(t+Δt)dt = a(t) + (Δt/6) * [k1 + 2 * k2 + 2 * k3 + k4]
+        // - k1 = f(t, v(t))
+        // - k2 = f(t+Δt/2, v(t) + k1 * Δt/2)
+        // - k3 = f(t+Δt/2, v(t) + k2 * Δt/2)
+        // - k4 = f(t+Δt, v(t) + k3 * Δt)
         //
-        let (euler_next_ft, _) = self.euler_next_step(current_t, current_f_t, current_integral);
-        let (euler_half_ft, _) = self.euler_half_step(current_t, current_f_t, current_integral);
-        let k_one_ft = current_t;
-        let k_two_ft = euler_half_ft;
-        let k_three_ft = euler_half_ft;
-        let k_four_ft = euler_next_ft;
-        let k_one_ddt_ft = self.d_dt_function_t(current_t, current_integral);
-        let k_two_ddt_ft = self.d_dt_function_t(
-            &(current_t + self.time_step / 2.0),
-            &(current_integral + k_one_ddt_ft * self.time_step / 2.0),
+        // Let our model be:
+        // a(t)
+        //   = f(t, v(t))
+        //   = f(t, dx(t)/dt)
+        //   = g(t, ∫v(t)dt)
+        //   = g(t, x(t))
+        //
+        // When written using g():
+        // - k1 = g(t, x(t))
+        // - k2 = g(t+Δt/2, x(t) * Δt/2 * k1 * (t+Δt/2))
+        // - k3 = g(t+Δt/2, x(t) * Δt/2 * k2 * (t+Δt/2))
+        // - k4 = g(t+Δt, x(t) * Δt/2 * k3 * (t+Δt))
+        //
+        let half_timestep = self.time_step / 2.0;
+        let k_one = self.acceleration_t(current_t, current_position);
+        let k_two = self.acceleration_t(
+            &(current_t + half_timestep),
+            &(current_position + &half_timestep * &k_one * (current_t + half_timestep)),
         );
-        let k_three_ddt_ft = self.d_dt_function_t(
-            &(current_t + self.time_step / 2.0),
-            &(current_integral + k_two_ddt_ft * self.time_step / 2.0),
+        let k_three = self.acceleration_t(
+            &(current_t + half_timestep),
+            &(current_position + &half_timestep * &k_two * (current_t + half_timestep)),
         );
-        let k_four_ddt_ft = self.d_dt_function_t(
+        let k_four = self.acceleration_t(
             &(current_t + self.time_step),
-            &(current_integral + k_three_ddt_ft * self.time_step),
+            &(current_position + self.time_step * &k_three * (current_t + self.time_step)),
         );
+        let next_acc = current_acceleration
+            + (self.time_step / 6.0) * (k_one + 2.0 * k_two + 2.0 * k_three + k_four);
 
-        let next_integral = current_integral
-            + self.time_step * (k_one_ft + 2.0 * k_two_ft + 2.0 * k_three_ft + k_four_ft) / 6.0;
-        let next_f_t = current_f_t
-            + self.time_step
-                * (k_one_ddt_ft + 2.0 * k_two_ddt_ft + 2.0 * k_three_ddt_ft + k_four_ddt_ft)
-                / 6.0;
-        (next_f_t, next_integral)
+        let next_vel = current_velocity + self.time_step * (current_acceleration + next_acc) / 2.0;
+        let next_pos = current_position + self.time_step * (current_velocity + next_vel) / 2.0;
+        (next_acc, next_vel, next_pos)
     }
 
-    pub fn integrate_solution(&self, method: &str) -> (Vec<f32>, Vec<f32>, Vec<f32>) {
+    pub fn integrate_solution(&self, method: &str) -> (Vec<f32>, Vec<f32>, Vec<f32>, Vec<f32>) {
         // Compute integral ∫f(t)dt from 0 to time_end using Euler method for ODE + trapezoidal rule for integration
         // method: &str
         // - "euler": euler method
@@ -196,37 +185,41 @@ impl Solver {
         // - "rk4": Runge-Kutta 4
         // - "analytical": analytical
         let mut t: f32 = 0.0;
-        let mut f_t: f32 = self.f_0;
-        let mut integral: f32 = 0.0;
+        let mut acc: f32 = self.init_acceleration;
+        let mut vel: f32 = self.init_velocity;
+        let mut pos: f32 = self.init_position;
 
         let mut t_vec = vec![t];
-        let mut f_t_vec = vec![f_t];
-        let mut integral_vec = vec![integral];
+        let mut acc_vec = vec![acc];
+        let mut vel_vec = vec![vel];
+        let mut pos_vec = vec![pos];
 
         while t < self.time_end {
             // Compute f(t+Δt), ∫f(t+Δt)dt
-            let f_t_next: f32;
-            let integral_next: f32;
+            let acc_next: f32;
+            let vel_next: f32;
+            let pos_next: f32;
             if method == "euler" {
-                (f_t_next, integral_next) = self.euler_next_step(&t, &f_t, &integral);
+                (acc_next, vel_next, pos_next) = self.euler_next_step(&t, &acc, &vel, &pos);
             // } else if method == "trap" {
             } else if method == "rk4" {
-                (f_t_next, integral_next) = self.rk4_next_step(&t, &f_t, &integral);
-            } else if method == "analytical" {
-                f_t_next = self.function_t(&(t + self.time_step));
-                integral_next = self.integral_function_t(&t);
+                (acc_next, vel_next, pos_next) = self.rk4_next_step(&t, &acc, &vel, &pos);
+            // } else if method == "analytical" {
+            // (acc_next, vel_next, pos_next) = self.analytical_t(&t);
             } else {
                 panic!("Bad parameter; method: &str");
             }
 
-            f_t = f_t_next;
-            integral = integral_next;
+            acc = acc_next;
+            vel = vel_next;
+            pos = pos_next;
             t += self.time_step;
 
             t_vec.push(t);
-            f_t_vec.push(f_t);
-            integral_vec.push(integral);
+            acc_vec.push(acc);
+            vel_vec.push(vel);
+            pos_vec.push(pos);
         }
-        (t_vec, f_t_vec, integral_vec)
+        (t_vec, acc_vec, vel_vec, pos_vec)
     }
 }
