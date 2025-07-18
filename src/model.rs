@@ -1,3 +1,4 @@
+use num::pow;
 use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
@@ -84,21 +85,33 @@ impl Solver {
         }
     }
 
-    // /* Analytical Solutions ******************************************************/
-    // fn analytical_t(&self, t: &f32) -> (f32, f32, f32) {
-    //     // Change here if analytical solution is known.
-    //     // Analytical solution: x(t) = ∫v(t)dt for 0 -> t
-    //     // v(t) = dx(t)/dt
-    //     // a(t) = dv(t)/dt
-    //     // A = constant
-    //     // sigma = constant
-    //     // A cos(omega * t + sigma) + (ext_amp / omega^2) cos(ext_freq * t)
-    //     let acc;
-    //     let vel;
-    //     let pos;
-    //     (acc, vel, pos)
-    // }
-    // /* Analytical Solutions ********************************************************/
+    /* Analytical Solutions ******************************************************/
+    fn analytical_t(&self, t: &f32) -> (f32, f32, f32) {
+        // Change here if analytical solution is known.
+        // Analytical solution:
+        // - x(t) = ∫v(t)dt for 0 -> t
+        // - v(t) = dx(t)/dt
+        // - a(t) = dv(t)/dt
+        //
+        // A = ext_amp / (spring_k - mass * ext_freq^2)
+        // delta = 0
+        // x(t) = A cos(sqrt(spring_k / mass) * t + delta) + (ext_amp / (spring_k - mass * ext_freq^2)) * cos(ext_freq * t)
+        let const_a = self.amplitude / (self.spring - self.mass * pow(self.frequency, 2));
+        let delta: f32 = 0.0;
+        let pos = const_a * ((self.spring / self.mass).sqrt() * t + delta).cos()
+            + const_a * (self.frequency * t).cos();
+        let vel = -const_a
+            * (self.spring / self.mass).sqrt()
+            * ((self.spring / self.mass).sqrt() * t + delta).sin()
+            - const_a * self.frequency * (self.frequency * t).sin();
+        let acc = -const_a
+            * (self.spring / self.mass)
+            * ((self.spring / self.mass).sqrt() * t + delta).cos()
+            - const_a * pow(self.frequency, 2) * (self.frequency * t).sin();
+        (acc, vel, pos)
+    }
+    /* Analytical Solutions ********************************************************/
+
     /* Model ***********************************************************************/
     fn acceleration_t(&self, current_t: &f32, current_position: &f32) -> f32 {
         // Change this fuction to change the model.
@@ -204,8 +217,8 @@ impl Solver {
             // } else if method == "trap" {
             } else if method == "rk4" {
                 (acc_next, vel_next, pos_next) = self.rk4_next_step(&t, &acc, &vel, &pos);
-            // } else if method == "analytical" {
-            // (acc_next, vel_next, pos_next) = self.analytical_t(&t);
+            } else if method == "analytical" {
+                (acc_next, vel_next, pos_next) = self.analytical_t(&t);
             } else {
                 panic!("Bad parameter; method: &str");
             }

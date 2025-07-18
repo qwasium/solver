@@ -106,16 +106,13 @@ fn main() -> Result<(), Box<dyn Error>> {
     println!("{:?}", conf);
     println!();
 
-    // let (t_vec, anal_acc, anal_vel, anal_pos) = conf.integrate_solution("analytical");
-    let (t_vec, euler_acc, euler_vel, euler_pos) = conf.integrate_solution("euler");
+    let (t_vec, anal_acc, anal_vel, anal_pos) = conf.integrate_solution("analytical");
+    let (_, euler_acc, euler_vel, euler_pos) = conf.integrate_solution("euler");
     let (_, rk_acc, rk_vel, rk_pos) = conf.integrate_solution("rk4");
 
     // Compare final values f(time_end)
     println!("=== Final Values v({}) ===", conf.time_end);
-    // println!(
-    //     "Analytical solution: {:.6}",
-    //     conf.function_t(&conf.time_end)
-    // );
+    println!("Analytical solution: {:.6}", anal_vel.last().unwrap());
     println!("Euler method:        {:.6}", euler_vel.last().unwrap());
     println!("Runge-Kutta method:  {:.6}", rk_vel.last().unwrap());
     println!();
@@ -125,10 +122,10 @@ fn main() -> Result<(), Box<dyn Error>> {
         "=== Integrals x(t) = ∫v(t)dt from 0 to {} ===",
         conf.time_end
     );
-    // println!(
-    //     "Analytical integral:           {:.6}",
-    //     anal_area.last().unwrap()
-    // );
+    println!(
+        "Analytical integral:           {:.6}",
+        anal_pos.last().unwrap()
+    );
     println!(
         "Euler ODE + Trap integration:  {:.6}",
         euler_pos.last().unwrap()
@@ -145,26 +142,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         data_dir.join(doc["acc_fname"].as_str().expect("acc_fname must be string"));
     let velocity_path = data_dir.join(doc["vel_fname"].as_str().expect("vel_fname must be string"));
     let position_path = data_dir.join(doc["pos_fname"].as_str().expect("pos_fname must be string"));
-    write_csv(
-        &t_vec,
-        &euler_acc,
-        &rk_acc,
-        &vec![0.0; t_vec.len()], /*&anal_acc*/
-        &acceleration_path,
-    )?;
-    write_csv(
-        &t_vec,
-        &euler_acc,
-        &rk_acc,
-        &vec![0.0; t_vec.len()], /*&anal_acc*/
-        &velocity_path,
-    )?;
-    write_csv(
-        &t_vec,
-        &euler_pos,
-        &rk_pos,
-        &vec![0.0; t_vec.len()], /*&anal_pos*/
-        &position_path,
-    )?;
+    write_csv(&t_vec, &euler_acc, &rk_acc, &anal_acc, &acceleration_path)?;
+    write_csv(&t_vec, &euler_acc, &rk_acc, &anal_acc, &velocity_path)?;
+    write_csv(&t_vec, &euler_pos, &rk_pos, &anal_pos, &position_path)?;
     Ok(())
 }
