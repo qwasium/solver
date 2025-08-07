@@ -1,5 +1,6 @@
 use csv::Writer;
 use std::collections::HashMap;
+use std::env;
 use std::error::Error;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -7,7 +8,29 @@ use yaml_rust::YamlLoader;
 
 mod model;
 use model::forced_vibration::ForcedVibration;
-use model::model::Solver;
+use model::freefall_viscosity::FreefallViscosity;
+use model::model::{Solver, SolverParam};
+
+#[derive(Debug)]
+enum Model {
+    ForcedVibration(ForcedVibration),
+    FreefallViscosity(FreefallViscosity),
+}
+
+impl Model {
+    fn integrate_solution(&self, method: &str) -> (Vec<f32>, Vec<f32>, Vec<f32>, Vec<f32>) {
+        match self {
+            Model::ForcedVibration(model) => model.integrate_solution(method),
+            Model::FreefallViscosity(model) => model.integrate_solution(method),
+        }
+    }
+    fn condition(&self) -> &SolverParam {
+        match self {
+            Model::ForcedVibration(model) => model.condition(),
+            Model::FreefallViscosity(model) => model.condition(),
+        }
+    }
+}
 
 fn read_yaml<P: AsRef<Path>>(fpath: P) -> Result<Vec<yaml_rust::Yaml>, Box<dyn Error>> {
     let f_str = fs::read_to_string(fpath)?;
@@ -74,7 +97,7 @@ fn write_csv<P: AsRef<Path>>(
     }
 
     let mut wrt = Writer::from_path(filename)?;
-    wrt.write_record(&["timestamp", "euler", "rk4", "analytical"])?; // header
+    wrt.write_record(&["timestamp", "euler", "rk4"])?; //, "analytical"])?; // header
     for row in 0..time_vec.len() {
         wrt.write_record(&[
             time_vec[row].to_string(),  // col 0
@@ -88,21 +111,41 @@ fn write_csv<P: AsRef<Path>>(
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    // Read config/settings.yaml
-    let conf_path = PathBuf::from("config").join("settings.yaml");
+    // Read config
+    let args: Vec<String> = env::args().collect();
+    let conf_path = if args.len() > 1 {
+        PathBuf::from(&args[1])
+    } else {
+        // default: config/settings.yaml
+        PathBuf::from("config").join("settings.yaml")
+    };
     let conf_docs = read_yaml(&conf_path)?;
     let doc = &conf_docs[0];
     // println!("{:?}", doc); // debug
 
-    let conf = ForcedVibration::new(
-        yaml_to_f32(&doc["time_end"]).expect("time_end must be numeric"), // time_end
-        yaml_to_f32(&doc["time_step"]).expect("time_step must be numeric"), // time_step
-        yaml_to_f32(&doc["init_acceleration"]).expect("init_acceleration must be numeric"), // a(0)
-        yaml_to_f32(&doc["init_velocity"]).expect("init_velocity must be numeric"), // v(0)
-        yaml_to_f32(&doc["init_position"]).expect("init_position must be numeric"), // x(0)
-        yaml_to_f32_hashmap(&doc["model_params"])
-            .expect("model_params must be hashmap of string and numerics"),
-    );
+    // simulation parameters
+    let time_end = yaml_to_f32(&doc["time_end"]).expect("time_end must be numeric"); // time_end
+    let time_step = yaml_to_f32(&doc["time_step"]).expect("time_step must be numeric"); // time_step
+    let init_acc =
+        yaml_to_f32(&doc["init_acceleration"]).expect("init_acceleration must be numeric"); // a(0)
+    let init_vel = yaml_to_f32(&doc["init_velocity"]).expect("init_velocity must be numeric"); // v(0)
+    let init_pos = yaml_to_f32(&doc["init_position"]).expect("init_position must be numeric"); // x(0)
+    let params = yaml_to_f32_hashmap(&doc["model_params"])
+        .expect("model_params must be hashmap of string and numerics");
+
+    // load model
+    let model = doc["model"].as_str().expect("model must be string");
+    let conf = match model {
+        "forced_vibration" => Model::ForcedVibration(ForcedVibration::new(
+            time_end, time_step, init_acc, init_vel, init_pos, params,
+        )),
+        "freefall_viscosity" => Model::FreefallViscosity(FreefallViscosity::new(
+            time_end, time_step, init_acc, init_vel, init_pos, params,
+        )),
+        _ => {
+            return Err(format!("Unknown model: {}", model).into());
+        }
+    };
 
     println!("{:?}", conf);
     println!();
@@ -112,7 +155,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let (_, rk_acc, rk_vel, rk_pos) = conf.integrate_solution("rk4");
 
     // Compare final values f(time_end)
-    println!("=== Final Values v({}) ===", conf.condition.time_end);
+    println!("=== Final Values v({}) ===", conf.condition().time_end);
     // println!("Analytical solution: {:.6}", anal_vel.last().unwrap());
     println!("Euler method:        {:.6}", euler_vel.last().unwrap());
     println!("Runge-Kutta method:  {:.6}", rk_vel.last().unwrap());
@@ -121,7 +164,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     // Compare integrals ∫f(t)dt from 0 to time_end
     println!(
         "=== Integrals x(t) = ∫v(t)dt from 0 to {} ===",
-        conf.condition.time_end
+        conf.condition().time_end
     );
     // println!(
     //     "Analytical integral:           {:.6}",

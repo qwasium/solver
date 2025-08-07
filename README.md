@@ -4,7 +4,7 @@ Implementing physics solvers for initial value problems in rust for self study.
 
 See:
 
-- `main.ipynb`: Just see this to run
+- `visualize.ipynb`: Just see this to run
 - `src/main.rs`: The main solver logic
 
 ## Environment

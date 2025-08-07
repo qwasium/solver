@@ -2,6 +2,7 @@ acc_fname: acceleration.csv
 init_acceleration: 0.0
 init_position: 0.0
 init_velocity: 0.0
+model: forced_vibration
 model_params:
   amplitude: 5
   frequency: 3

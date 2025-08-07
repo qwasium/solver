@@ -1,3 +1,4 @@
+model: forced_vibration
 init_acceleration: 0
 init_velocity: 0
 init_position: 0
