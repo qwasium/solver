@@ -1,11 +1,11 @@
 acc_fname: acceleration.csv
 init_acceleration: 0.0
-init_position: 0.0
+init_position: 10.0
 init_velocity: 0.0
 model: vibration
 model_params:
-  amplitude: 5
-  frequency: 3
+  amplitude: 0
+  frequency: 0
   mass: 10
   spring: 10
 pos_fname: position.csv

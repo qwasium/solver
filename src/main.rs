@@ -7,27 +7,27 @@ use std::path::{Path, PathBuf};
 use yaml_rust::YamlLoader;
 
 mod model;
-use model::forced_vibration::ForcedVibration;
-use model::freefall_viscosity::FreefallViscosity;
+use model::fall::Fall;
 use model::model::{Solver, SolverParam};
+use model::vibration::Vibration;
 
 #[derive(Debug)]
 enum Model {
-    ForcedVibration(ForcedVibration),
-    FreefallViscosity(FreefallViscosity),
+    Vibration(Vibration),
+    Fall(Fall),
 }
 
 impl Model {
     fn integrate_solution(&self, method: &str) -> (Vec<f32>, Vec<f32>, Vec<f32>, Vec<f32>) {
         match self {
-            Model::ForcedVibration(model) => model.integrate_solution(method),
-            Model::FreefallViscosity(model) => model.integrate_solution(method),
+            Model::Vibration(model) => model.integrate_solution(method),
+            Model::Fall(model) => model.integrate_solution(method),
         }
     }
     fn condition(&self) -> &SolverParam {
         match self {
-            Model::ForcedVibration(model) => model.condition(),
-            Model::FreefallViscosity(model) => model.condition(),
+            Model::Vibration(model) => model.condition(),
+            Model::Fall(model) => model.condition(),
         }
     }
 }
@@ -136,10 +136,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     // load model
     let model = doc["model"].as_str().expect("model must be string");
     let conf = match model {
-        "forced_vibration" => Model::ForcedVibration(ForcedVibration::new(
+        "vibration" => Model::Vibration(Vibration::new(
             time_end, time_step, init_acc, init_vel, init_pos, params,
         )),
-        "freefall_viscosity" => Model::FreefallViscosity(FreefallViscosity::new(
+        "fall" => Model::Fall(Fall::new(
             time_end, time_step, init_acc, init_vel, init_pos, params,
         )),
         _ => {

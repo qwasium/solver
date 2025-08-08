@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use super::model::{Solver, SolverParam};
 
 #[derive(Debug, Clone)]
-pub struct ForcedVibration {
+pub struct Vibration {
     pub condition: SolverParam,
     mass: f32,      // mass
     spring: f32,    // spring constant
@@ -12,7 +12,7 @@ pub struct ForcedVibration {
     frequency: f32, // frequency of external force
 }
 
-impl ForcedVibration {
+impl Vibration {
     pub fn new(
         time_end: f32,
         time_step: f32,
@@ -63,7 +63,7 @@ impl ForcedVibration {
     }
 }
 
-impl Solver for ForcedVibration {
+impl Solver for Vibration {
     fn condition(&self) -> &SolverParam {
         &self.condition
     }

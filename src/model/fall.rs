@@ -3,14 +3,14 @@ use std::collections::HashMap;
 use super::model::{Solver, SolverParam};
 
 #[derive(Debug, Clone)]
-pub struct FreefallViscosity {
+pub struct Fall {
     pub condition: SolverParam,
     mass: f32,      // mass
     viscosity: f32, // viscosity coefficient
     gravity: f32,   // gravitational acceleration 9.8 m/s^2
 }
 
-impl FreefallViscosity {
+impl Fall {
     pub fn new(
         time_end: f32,
         time_step: f32,
@@ -50,7 +50,7 @@ impl FreefallViscosity {
     }
 }
 
-impl Solver for FreefallViscosity {
+impl Solver for Fall {
     fn condition(&self) -> &SolverParam {
         &self.condition
     }
